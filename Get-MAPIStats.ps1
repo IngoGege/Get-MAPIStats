@@ -3,7 +3,7 @@
 
         Created by: https://ingogegenwarth.wordpress.com/
         Version:    42 ("What do you get if you multiply six by nine?")
-        Changed:    12.01.2017
+        Changed:    03.03.2022
 
         .DESCRIPTION
 
@@ -37,25 +37,9 @@
 
         Define where the CSV files will be stored. Default is "$env:temp"
 
-        .PARAMETER ConcurrentConnections
-
-        Switch to query number of concurrent connections within the given ConcurentIntervall.
-
-        .PARAMETER ConcurrentIntervall
-
-        Define the intervall of the query ConcurrentConnections in seconds. Default is 900 seconds=15 minutes.
-
-        .PARAMETER ClientReport
-
-        Creates areport of all unique user-agents and the number of hits for each.
-        Note: This is NOT the unique number of users.
-
         .PARAMETER ErrorReport
 
         Creates a report of all errors.
-
-        .PARAMETER E16CU4orLater
-        With Exchange 2016CU4 the path and design of these logfiles have been changed. With this switch you can query these.
 
         .PARAMETER Localpath
 
@@ -64,8 +48,6 @@
         .EXAMPLE
 
         .\Get-MAPIStats.ps1 -UserID Ingo -Outpath $env:USERPROFILE\Documents
-
-        .\Get-MAPIStats.ps1 -ConcurrentConnections -Outpath $env:USERPROFILE\Documents
 
         .\Get-MAPIStats.ps1 -ErrorReport -Outpath $env:USERPROFILE\Documents
 
@@ -85,63 +67,50 @@ param(
     [parameter( ParameterSetName='ALL')]
     [parameter( ParameterSetName='USER')]
     [parameter(Mandatory=$false, Position=0)]
-    [string]$UserID,
+    [System.String]
+    $UserID,
 
     [parameter( ParameterSetName='ALL')]
     [parameter( ParameterSetName='USERS')]
     [parameter(Mandatory=$false, Position=1)]
-    [array]$UserIDs,
+    [System.Array]
+    $UserIDs,
 
     [parameter( Mandatory=$false, Position=2)]
-    [int]$StartDate="$((get-date).ToString('yyMMdd'))",
+    [System.Int32]
+    $StartDate="$((get-date).ToString('yyMMdd'))",
 
     [parameter( Mandatory=$false, Position=3)]
-    [int]$EndDate="$((get-date).ToString('yyMMdd'))",
+    [System.Int32]
+    $EndDate="$((get-date).ToString('yyMMdd'))",
 
     [parameter( Mandatory=$false, Position=4)]
     [ValidateScript({if (Test-Path -Path $_ -PathType leaf) {$True} else {Throw 'Logparser could not be found!'}})]
-    [string]$Logparser="${env:ProgramFiles(x86)}\Log Parser 2.2\LogParser.exe",
+    [System.String]
+    $Logparser="${env:ProgramFiles(x86)}\Log Parser 2.2\LogParser.exe",
 
     [parameter( Mandatory=$false, Position=5)]
-    [string[]]$ADSite="([System.DirectoryServices.ActiveDirectory.ActiveDirectorySite]::GetComputerSite()).Name",
+    [System.String[]]
+    $ADSite="([System.DirectoryServices.ActiveDirectory.ActiveDirectorySite]::GetComputerSite()).Name",
 
     [parameter( Mandatory=$false, Position=6)]
     [ValidateScript({if (Test-Path -Path $_ -PathType container) {$True} else {Throw ('{0} is not a valid path!' -f $_)}})]
-    [string]$Outpath = $env:temp,
+    [System.String]
+    $Outpath = $env:temp,
 
-    [parameter( ParameterSetName='ALL')]
-    [parameter( ParameterSetName='USER')]
-    [parameter( ParameterSetName='USERS')]
-    [parameter( ParameterSetName='Concurrent')]
+    [parameter( ParameterSetName='ErrorReport')]
     [parameter( Mandatory=$false, Position=7)]
-    [switch]$ConcurrentConnections,
+    [System.Management.Automation.SwitchParameter]
+    $ErrorReport,
 
-    [parameter( ParameterSetName='USER')]
-    [parameter( ParameterSetName='USERS')]
-    [parameter( ParameterSetName='Concurrent')]
-    [parameter( Mandatory=$false, Position=7)]
-    [int]$ConcurrentIntervall= '900',
-
-    [parameter( ParameterSetName='ClientReport')]
     [parameter( Mandatory=$false, Position=8)]
-    [switch]$ClientReport,
+    [System.Array]
+    $SpecifiedServers,
 
-    [parameter( ParameterSetName='ErrorReport')]
     [parameter( Mandatory=$false, Position=9)]
-    [switch]$ErrorReport,
-
-    [parameter( Mandatory=$false, Position=10)]
-    [array]$SpecifiedServers,
-
-    [parameter( ParameterSetName="USER")]
-    [parameter( ParameterSetName="USERS")]
-    [parameter( ParameterSetName='ErrorReport')]
-    [parameter( Mandatory=$false, Position=11)]
-    [switch]$E16CU4orLater = $true,
-
-    [parameter( Mandatory=$false, Position=12)]
     [ValidateScript({if (Test-Path -Path $_ -PathType container) {$True} else {Throw "$_ is not a valid path!"}})]
-    [string]$Localpath
+    [System.String]
+    $Localpath
 )
 
 Begin{
@@ -238,12 +207,7 @@ Begin{
         $temp.ToLower()
     }
 
-    if ($E16CU4orLater) {
-        $LogFolder = '\Logging\MapiHttp\Mailbox'
-    }
-    else {
-        $LogFolder = '\Logging\MAPI Client Access'
-    }
+    $LogFolder = '\Logging\MapiHttp\Mailbox'
 
     # set variables
     [string]$FolderPath = $null
@@ -254,17 +218,13 @@ Begin{
     #Get Server and folders
     if (!($Localpath)) {
         # get CAS servers
-        if ($E16CU4orLater) {
-            [array]$Servers += GetExchServer -Role 16385,16439 -ADSites $ADSite | Where-Object {$_.Properties.versionnumber -ge '1942061725'}
-        }
-        else{
-            [array]$Servers += GetExchServer -Role 16385,16439 -ADSites $ADSite | Where-Object {$_.Properties.versionnumber -lt '1942061725'}
-        }
+        [array]$Servers += GetExchServer -Role 16385,16439 -ADSites $ADSite | Where-Object {$_.Properties.versionnumber -ge '1942061725'}
+
         if ($SpecifiedServers) {
             $Servers = $Servers | Where-Object {$SpecifiedServers -contains $_.Properties.name}
         }
         if ($Servers) {
-            Write-Output -InputObject 'Found the following Exchange 2013 servers:', $($Servers | foreach-Object{$_.Properties.name})
+            Write-Output -InputObject 'Found the following Exchange servers:', $($Servers | foreach-Object{$_.Properties.name})
             foreach ($Server in $Servers) {
                 [array]$TempPath += '\\' + $Server.Properties.name + '\' + ($Server.Properties.msexchinstallpath -as [string]).Replace(':','$') + $LogFolder
             }
@@ -337,16 +297,9 @@ Process{
     }
 
     # check for header from logs
-    if ($E16CU4orLater) {
-        Write-Host "Get headers from file" ($logsfrom.Split(",") | select -First 1 ).Replace("'","")
-        [string]$fields = Get-Content ($logsfrom.Split(",") | select -First 1 ).Replace("'","") -TotalCount 1
-        $fields = $fields.Replace("DateTime","Day,Time,Server")
-    }
-    else {
-        Write-Host "Get headers from file" ($logsfrom.Split(",") | select -First 1 ).Replace("'","")
-        [string]$fields = Get-Content ($logsfrom.Split(",") | select -First 1 ).Replace("'","") -TotalCount 5 | select -Last 1
-        $fields = $fields.Replace("#Fields: date-time","Day,Time").Replace("client-name","Server,Mailbox,AvgClientLatency,AvgCasRPCProcessingTime,AvgMbxProcessingTime,MaxCasRPCProcessingTime,ClientRPCCount,ServerRPCCount,client-name")
-    }
+    Write-Host "Get headers from file" ($logsfrom.Split(",") | select -First 1 ).Replace("'","")
+    [string]$fields = Get-Content ($logsfrom.Split(",") | select -First 1 ).Replace("'","") -TotalCount 1
+    $fields = $fields.Replace("DateTime","Day,Time,Server")
 
     # set stamps
     if ($userid -OR $userids) {
@@ -368,11 +321,10 @@ Process{
     }
 
     #build query
-    if ($E16CU4orLater) {
-        $MAPIServer = "EXTRACT_PREFIX(EXTRACT_TOKEN(EXTRACT_PATH(filename),1,'\\\\'),0,'\\')"
-        if ($ErrorReport) {
-            $stamp = ($ADSite -join "_") + "_ErrorReport_" + $(Get-Date -Format HH-mm-ss)
-            $query_MAPI = @"
+    $MAPIServer = "EXTRACT_PREFIX(EXTRACT_TOKEN(EXTRACT_PATH(filename),1,'\\\\'),0,'\\')"
+    if ($ErrorReport) {
+        $stamp = ($ADSite -join "_") + "_ErrorReport_" + $(Get-Date -Format HH-mm-ss)
+        $query_MAPI = @"
 Select $fields
 
 USING
@@ -392,15 +344,14 @@ WHERE GenericErrors IS NOT NULL AND Time IS NOT NULL
 GROUP BY $fields
 ORDER BY Day,Time
 "@
-   
         }
-        else {
-            $query_MAPI = @"
+    else {
+        $query_MAPI = @"
 Select $fields
 
 USING
 TO_STRING(TO_TIMESTAMP(EXTRACT_PREFIX(REPLACE_STR([#Fields: datetime],'T',' '),0,'.'), 'yyyy-MM-dd hh:mm:ss'),'yyMMdd') AS Day,
-TO_TIMESTAMP(EXTRACT_PREFIX(TO_STRING(EXTRACT_SUFFIX([#Fields: datetime],0,'T')),0,'.'), 'hh:mm:ss') AS Time,
+TO_TIMESTAMP(EXTRACT_PREFIX(TO_STRING(EXTRACT_SUFFIX([#Fields: datetime],0,'T')),0,'.'), 'hh:mm:ss') AS Time ,
 $MAPIServer AS Server
 
 INTO $outpath\*_MAPI_$stamp.csv
@@ -408,34 +359,37 @@ From
 
 "@
 
-            $query_MAPI += $Logsfrom
+    $query_MAPI += $Logsfrom
 
-            if ($UserID){
-                Write-Host -fore yellow "Query for user $UserID!"
-                $query_MAPI += @"
-    WHERE (AuthenticatedUserEmail LIKE '%$UserID%') OR (ActAsUserEmail LIKE '%$UserID%')
+    if ($UserID){
+        Write-Host -fore yellow "Query for user $UserID!"
+        $query_MAPI += @"
+
+WHERE (AuthenticatedUserEmail LIKE '%$UserID%') OR (ActAsUserEmail LIKE '%$UserID%')
 
 "@
             }
 
-            if ($UserIDs){
-                [string]$QueryString= ""
-                foreach ($UserID in $UserIDs) {
-                    $QueryString += "((AuthenticatedUserEmail LIKE '%$UserID%') OR (ActAsUserEmail LIKE '%$UserIDs%')) OR " 
-                }
+    if ($UserIDs){
+        [string]$QueryString= ""
+        foreach ($UserID in $UserIDs) {
+            $QueryString += "((AuthenticatedUserEmail LIKE '%$UserID%') OR (ActAsUserEmail LIKE '%$UserIDs%')) OR " 
+        }
 
-                #build string from multiple addresses
-                $QueryString = $QueryString.Substring("0",($QueryString.LastIndexOf(")")+1))
-                Write-Host -fore yellow "Query for users $([string]::Join(";",$UserIDs))!"
-                $query_MAPI += @"
+        #build string from multiple addresses
+        $QueryString = $QueryString.Substring("0",($QueryString.LastIndexOf(")")+1))
+        Write-Host -fore yellow "Query for users $([string]::Join(";",$UserIDs))!"
+        $query_MAPI += @"
 
 WHERE $QueryString
+
 "@
             }
 
             $query_MAPI += @"
+
 GROUP BY $fields
-ORDER BY Day,Time 
+ORDER BY Day,Time
 "@
 
         }
@@ -445,181 +399,6 @@ ORDER BY Day,Time
         Write-Output "Start query!"
         & $Logparser file:$Outpath\query.txt -i:csv -nSkipLines:5 -e:100 -iw:on -dtLines:0
 
-    }
-    else {
-        if ($ErrorReport) {
-
-            $stamp = ($ADSite -join '_') + '_ErrorReport_' + $(Get-Date -Format HH-mm-ss)
-
-            $query_MAPI = @"
-Select $fields
-
-USING
-TO_STRING(TO_TIMESTAMP(EXTRACT_PREFIX(REPLACE_STR([#Fields: date-time],'T',' '),0,'.'), 'yyyy-MM-dd hh:mm:ss'),'yyMMdd') AS Day,
-TO_TIMESTAMP(EXTRACT_PREFIX(TO_STRING(EXTRACT_SUFFIX([#Fields: date-time],0,'T')),0,'.'), 'hh:mm:ss') AS Time,
-SUBSTR(EXTRACT_SUFFIX(client-name,0,'/'),3) AS Mailbox,
-TO_LOWERCASE(SUBSTR(EXTRACT_SUFFIX(client-name,0,'/'),3)) AS Mailbox2,
-TO_LOWERCASE(REPLACE_STR(EXTRACT_SUFFIX(protocol,0,'\\'),']','')) AS Mailbox3,
-REPLACE_CHR(EXTRACT_PREFIX(EXTRACT_SUFFIX(performance-data,0,'ClientRPCCount'),0,';'),'=','') AS ClientRPCCount,
-REPLACE_CHR(EXTRACT_PREFIX(EXTRACT_SUFFIX(performance-data,0,'ServerRPCCount'),0,';'),'=','') AS ServerRPCCount,
-REPLACE_CHR(EXTRACT_PREFIX(EXTRACT_SUFFIX(performance-data,0,'AvgClientLatency'),0,';'),'=','') AS AvgClientLatency,
-REPLACE_CHR(EXTRACT_PREFIX(EXTRACT_SUFFIX(performance-data,0,'AvgCasRPCProcessingTime'),0,';'),'=','') AS AvgCasRPCProcessingTime,
-REPLACE_CHR(EXTRACT_PREFIX(EXTRACT_SUFFIX(performance-data,0,'AvgMbxProcessingTime'),0,';'),'=','') AS AvgMbxProcessingTime,
-REPLACE_CHR(EXTRACT_PREFIX(EXTRACT_SUFFIX(performance-data,0,'MaxCasRPCProcessingTime'),0,';'),'=','') AS MaxCasRPCProcessingTime,
-$MAPIServer AS Server
-
-INTO    $outpath\*_MAPI_$stamp.csv
-From
-
-"@
-
-            $query_MAPI += $Logsfrom
-            $query_MAPI += @"
-
-WHERE failures IS NOT NULL AND Time IS NOT NULL
-GROUP BY $fields
-ORDER BY Day,Time
-"@
-
-        }
-        elseif ($ConcurrentConnections) {
-            $stamp = ($ADSite -join '_') + '_Concurrent_' + $(Get-Date -Format HH-mm-ss)
-            $query_MAPI = @"
-Select Day,Time,Session,Mailbox
-
-USING
-TO_STRING(TO_TIMESTAMP(EXTRACT_PREFIX(REPLACE_STR([#Fields: date-time],'T',' '),0,'.'), 'yyyy-MM-dd hh:mm:ss'),'yyMMdd') AS Day,
-QUANTIZE(TO_TIMESTAMP(EXTRACT_PREFIX(TO_STRING(EXTRACT_SUFFIX([#Fields: date-time],0,'T')),0,'.'), 'hh:mm:ss'), $ConcurrentIntervall) AS Time,
-SUBSTR(EXTRACT_SUFFIX(client-name,0,'/'),3) AS Mailbox,
-TO_LOWERCASE(REPLACE_STR(EXTRACT_SUFFIX(protocol,0,'\\'),']','')) AS Mailbox3,
-session-id AS Session,
-$MAPIServer AS Server
-
-From
-"@
-            $query_MAPI += $Logsfrom
-            if ($UserID){
-                $query_MAPI += @"
-
-  WHERE ((Mailbox LIKE '%$UserID%') OR (Mailbox3 LIKE '%$UserID%')) AND
-"@
-            }
-            elseif ($UserIDs){
-                [string]$QueryString= ''
-                foreach ($UserID in $UserIDs) {
-                    $QueryString += "((Mailbox LIKE '%$UserID%') OR (Mailbox3 LIKE '%$UserID%')) OR"
-                }
-                $QueryString = $QueryString.Substring('0',($QueryString.LastIndexOf(')')+1))
-                $query_MAPI += @"
-
-  WHERE ($QueryString)  AND
-"@    
-            }
-            else{
-                $query_MAPI += @'
-
-  WHERE 
-'@
-            }
-            $query_MAPI += @"
- ((session-id IS NOT NULL) AND (Mailbox NOT LIKE '%HealthMailbox') AND (TIME IS NOT NULL))
-GROUP BY Day,Time,Mailbox,Session
-ORDER BY Time ASC
-"@
-
-            # workaround for limitation of path length, therefore we put the query into a file
-            Set-Content -Value $query_MAPI -Path $Outpath\query.txt -Force
-            Write-Output -InputObject 'Start Concurrent query!'
-            & $Logparser file:$Outpath\query.txt -i:csv -nSkipLines:4 -e:100 -iw:on -dtLines:0 -o:csv -q:on | & $Logparser "SELECT Day,Time,Mailbox,COUNT(Mailbox) AS SessionCount INTO $outpath\*_MAPI_$stamp.csv FROM STDIN GROUP BY DAY,TIME,Mailbox" -i:csv -e:100 -iw:on
-            Write-Output -InputObject 'Query done!'
-            # clean query file
-            Get-ChildItem -LiteralPath $Outpath -Filter query.txt | Remove-Item -Confirm:$false | Out-Null
-            break
-        }
-        elseif ($ClientReport){
-            $stamp = ($ADSite -join '_') + '_ClientReport_' + $(Get-Date -Format HH-mm-ss)
-            $query_MAPI = @"
-Select DISTINCT Day,Client,Version,Count(*) AS TotalHits
-USING
-TO_STRING(TO_TIMESTAMP(EXTRACT_PREFIX(REPLACE_STR([#Fields: date-time],'T',' '),0,'.'), 'yyyy-MM-dd hh:mm:ss'),'yyMMdd') AS Day,
-TO_LOWERCASE(client-software) AS Client,
-TO_LOWERCASE(client-software-version) AS Version
-
-INTO    $outpath\*_MAPI_$stamp.csv
-From
-
-"@
-            $query_MAPI += $Logsfrom
-            $query_MAPI += @'
-
-WHERE client-software IS NOT NULL AND Day IS NOT NULL
-GROUP BY Day,Client,Version
-ORDER BY TotalHits DESC
-'@
-
-        }
-        else {
-            $query_MAPI = @"
-Select $fields
-
-USING
-TO_STRING(TO_TIMESTAMP(EXTRACT_PREFIX(REPLACE_STR([#Fields: date-time],'T',' '),0,'.'), 'yyyy-MM-dd hh:mm:ss'),'yyMMdd') AS Day,
-TO_TIMESTAMP(EXTRACT_PREFIX(TO_STRING(EXTRACT_SUFFIX([#Fields: date-time],0,'T')),0,'.'), 'hh:mm:ss') AS Time,
-SUBSTR(EXTRACT_SUFFIX(client-name,0,'/'),3) AS Mailbox,
-TO_LOWERCASE(SUBSTR(EXTRACT_SUFFIX(client-name,0,'/'),3)) AS Mailbox2,
-TO_LOWERCASE(REPLACE_STR(EXTRACT_SUFFIX(protocol,0,'\\'),']','')) AS Mailbox3,
-REPLACE_CHR(EXTRACT_PREFIX(EXTRACT_SUFFIX(performance-data,0,'ClientRPCCount'),0,';'),'=','') AS ClientRPCCount,
-REPLACE_CHR(EXTRACT_PREFIX(EXTRACT_SUFFIX(performance-data,0,'ServerRPCCount'),0,';'),'=','') AS ServerRPCCount,
-REPLACE_CHR(EXTRACT_PREFIX(EXTRACT_SUFFIX(performance-data,0,'AvgClientLatency'),0,';'),'=','') AS AvgClientLatency,
-REPLACE_CHR(EXTRACT_PREFIX(EXTRACT_SUFFIX(performance-data,0,'AvgCasRPCProcessingTime'),0,';'),'=','') AS AvgCasRPCProcessingTime,
-REPLACE_CHR(EXTRACT_PREFIX(EXTRACT_SUFFIX(performance-data,0,'AvgMbxProcessingTime'),0,';'),'=','') AS AvgMbxProcessingTime,
-REPLACE_CHR(EXTRACT_PREFIX(EXTRACT_SUFFIX(performance-data,0,'MaxCasRPCProcessingTime'),0,';'),'=','') AS MaxCasRPCProcessingTime,
-$MAPIServer AS Server
-
-INTO    $outpath\*_MAPI_$stamp.csv
-From
-
-"@
-            $query_MAPI += $Logsfrom
-            if ($UserID){
-                Write-Host -fore yellow "Query for user $UserID!"
-                $query_MAPI += @"
-
-    WHERE (Mailbox LIKE '%$UserID%') OR (Mailbox3 LIKE '%$UserID%')
-"@
-            }
-
-            elseif ($UserIDs){
-                [string]$QueryString= ''
-                foreach ($UserID in $UserIDs) {
-                    $QueryString += "((Mailbox LIKE '%$UserID%') OR (Mailbox3 LIKE '%$UserIDs%')) OR " 
-                }
-                #build string from multiple addresses
-                $QueryString = $QueryString.Substring('0',($QueryString.LastIndexOf(')')+1))
-                Write-Host -fore yellow "Query for users $([string]::Join(';',$UserIDs))!"
-                $query_MAPI += @"
-
-WHERE $QueryString
-"@
-            }
-            else{
-                $query_MAPI += @'
-    WHERE Day IS NOT NULL
-'@
-            }
-
-            $query_MAPI += @"
-
-GROUP BY $fields
-ORDER BY Day,Time 
-"@
-        }
-        # workaround for limitation of path length, therefore we put the query into a file
-        Set-Content -Value $query_MAPI -Path $Outpath\query.txt -Force
-        Write-Output -InputObject 'Start query!'
-        & $Logparser file:$Outpath\query.txt -i:csv -nSkipLines:4 -e:100 -iw:on -dtLines:0
-        Write-Output -InputObject 'Query done!'
-    }
 }
 End{
     # clean query file
