@@ -131,7 +131,7 @@ Begin{
         param([array]$Roles,[string[]]$ADSites
         )
         Process {
-            $valid = @('2','4','16','20','32','36','38','54','64','16385','16439')
+            $valid = @('2','4','16','20','32','36','38','54','64','16385','16439','16423')
             foreach ($Role in $Roles){
                 if (!($valid -contains $Role)) {
                     Write-Output -InputObject 'Please use the following numbers: MBX=2,CAS=4,UM=16,HT=32,Edge=64 multirole servers:CAS/HT=36,CAS/MBX/HT=38,CAS/UM=20,E2k13 MBX=54,E2K13 CAS=16385,E2k13 CAS/MBX=16439'
@@ -218,7 +218,7 @@ Begin{
     #Get Server and folders
     if (!($Localpath)) {
         # get CAS servers
-        [array]$Servers += GetExchServer -Role 16385,16439 -ADSites $ADSite | Where-Object {$_.Properties.versionnumber -ge '1942061725'}
+        [array]$Servers += GetExchServer -Role 16385,16439,16423 -ADSites $ADSite | Where-Object {$_.Properties.versionnumber -ge '1942061725'}
 
         if ($SpecifiedServers) {
             $Servers = $Servers | Where-Object {$SpecifiedServers -contains $_.Properties.name}
